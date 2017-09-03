@@ -87,9 +87,8 @@ class CandlestickItem(pg.GraphicsObject):
         self.picture = QtGui.QPicture()
         p = QtGui.QPainter(self.picture)
         p.setPen(pg.mkPen('w'))
-        #w = (self.data[1][0] - self.data[0][0])/3
         ################################################################################
-        w = (self.day2num(self.data[1][0]) - self.day2num(self.data[0][0])) / 10
+        w = (self.day2num(self.data[1][0]) - self.day2num(self.data[0][0])) / 3
         ################################################################################
         for (t, open, close, high, low, vol, code) in self.data:
             t = self.day2num(str(t))
@@ -111,18 +110,7 @@ class CandlestickItem(pg.GraphicsObject):
         return QtCore.QRectF(self.picture.boundingRect())
 
 
-# data = [  # fields are (time, open, close, min, max).
-#     (1., 10, 13, 5, 15),
-#     (2., 13, 17, 9, 20),
-#     (3., 17, 14, 11, 23),
-#     (4., 14, 15, 5, 19),
-#     (5., 15, 9, 8, 22),
-#     (6., 9, 15, 8, 16),
-#     (7., 15, 10, 9, 20),
-#
-# ]
-
-data = tu.get_k_data('600606', start='2017-02-01', end='2017-09-01')
+data = tu.get_k_data('600606', start='2017-01-01', end='2017-09-01')
 data.set_index('date')
 temp = []
 lt = ()
@@ -134,39 +122,49 @@ item = CandlestickItem(temp)
 ############################################################
 # ndays = 146
 app = pg.mkQApp()
-#################################################
-## Define a top-level widget to hold everything
-w = QtGui.QWidget()
-
-## Create some widgets to be placed inside
-option=QtGui.QSpinBox()
-listw = QtGui.QListWidget()
-###################################################
+# pg.dbg()
 axis = DateAxis(orientation='bottom')
+sn = temp[0][6]
+dt = temp[-1][0]
+labelStyle = {'color': '#FFF', 'font-size': '12pt'}
+axis.setLabel(sn, units=dt, **labelStyle)
 vb = CustomViewBox()
-pw = pg.PlotWidget(viewBox=vb,
+p1 = pg.PlotWidget(viewBox=vb,
                    axisItems={'bottom': axis},
                    enableMenu=False,
                    )
 # dates = np.arange(ndays) * (3600 * 24 * 356)
 # pw = pg.plot(x=dates, y=np.array(data['close']))
-## Create a grid layout to manage the widgets size and position
-layout = QtGui.QGridLayout()
-w.setLayout(layout)
+###################################################
 
-## Add widgets to the layout in their proper positions
-layout.addWidget(option, 1, 0)   # text edit goes in middle-left
-layout.addWidget(listw, 2, 0)  # list widget goes in bottom-left
-layout.addWidget(pw, 0, 1, 3, 1)  # plot goes on right side, spanning 3 rows
-#############################################################
-# plt = pg.plot()
-w.show()
-#pw.show()
-pw.addItem(item)
+# cross hair
+vLine = pg.InfiniteLine(angle=90, movable=False)
+hLine = pg.InfiniteLine(angle=0, movable=False)
+p1.addItem(vLine, ignoreBounds=True)
+p1.addItem(hLine, ignoreBounds=True)
+
+vb_ =vb
+
+p1.show()
+p1.addItem(item)
+p1.setWindowTitle('Stock Market Monitor: ' + sn)
+#
+def mouseMoved(evt):
+    pos = evt[0]  # using signal proxy turns original arguments into a tuple
+    if p1.sceneBoundingRect().contains(pos):
+        mousePoint = vb_.mapSceneToView(pos)
+        index = int(mousePoint.x())
+        if index > 0 and index < len(temp):
+            print mousePoint.x(), temp[index][2], temp[index][5]
+            # label.setText("<span style='font-size: 12pt'>x=%0.1f,   <span style='color: red'>y1=%0.1f</span>,   <span style='color: green'>y2=%0.1f</span>" % (mousePoint.x(), temp[index][2], temp[index][5]))
+        vLine.setPos(mousePoint.x())
+        hLine.setPos(mousePoint.y())
+
+
+proxy = pg.SignalProxy(p1.scene().sigMouseMoved, rateLimit=60, slot=mouseMoved)
 
 # Start Qt event loop unless running in interactive mode or using pyside.
 if __name__ == '__main__':
     import sys
-
     if (sys.flags.interactive != 1) or not hasattr(QtCore, 'PYQT_VERSION'):
         QtGui.QApplication.instance().exec_()
